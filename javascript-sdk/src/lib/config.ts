@@ -4,10 +4,16 @@ export interface ApiConfig {
 }
 
 export interface SdkConfig {
-  pinecone: {
+  // Defaults to 'pinecone' if not specified.
+  vectorStore?: string;
+  pinecone?: {
     apikey: string;
     environment: string;
     index: string;
+  };
+  supabase?: {
+    serviceKey: string;
+    url: string;
   };
   openai: {
     apikey: string;
