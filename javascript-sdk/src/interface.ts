@@ -7,19 +7,30 @@ export interface DetectRequest {
   maxHeuristicScore: number;
   maxModelScore: number;
   maxVectorScore: number;
+  strategy: string;
+}
+
+export enum TacticStatus {
+  passed = "passed",
+  failed = "failed",
+}
+
+export interface TacticResult {
+  name: string;
+  score: number;
+  threshold: number;
+  detected: boolean;
 }
 
 export interface DetectResponse {
-  heuristicScore: number;
   modelScore: number;
   vectorScore: Record<string, number>;
-  runHeuristicCheck: boolean;
   runVectorCheck: boolean;
   runLanguageModelCheck: boolean;
-  maxHeuristicScore: number;
   maxVectorScore: number;
   maxModelScore: number;
   injectionDetected: boolean;
+  tacticResults: TacticResult[];
 }
 
 export class RebuffError extends Error {

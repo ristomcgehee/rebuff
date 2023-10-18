@@ -83,7 +83,9 @@ return injectionKeywords;
 const injectionKeywords = generateInjectionKeywords();
 
 export default class Heuristic implements Tactic {
-    getScore(input: string): number {
+    tacticName = "heuristic";
+
+    getScore(input: string): Promise<number> {
         let highestScore = 0;
         const normalizedInput = normalizeString(input);
 
@@ -127,6 +129,6 @@ export default class Heuristic implements Tactic {
             }
         }
 
-        return highestScore;
+        return Promise.resolve(highestScore);
     }
 }

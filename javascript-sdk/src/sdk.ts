@@ -3,6 +3,8 @@ import {
   DetectResponse,
   Rebuff,
   RebuffError,
+  TacticResult,
+  TacticStatus,
 } from "./interface";
 import crypto from "crypto";
 import { SdkConfig } from "./config";
@@ -42,7 +44,10 @@ export default class RebuffSdk implements Rebuff {
       model: config.openai.model || "gpt-3.5-turbo",
     };
     this.strategies = this.getStrategies(this.sdkConfig);
-    this.defaultStrategy = this.sdkConfig.strategies?.default || "default";
+    this.defaultStrategy = this.sdkConfig.strategies?.default || "standard";
+    if (!(this.defaultStrategy in this.strategies)) {
+      throw new RebuffError(`Default strategy "${this.defaultStrategy}" not present in enabled strategies.`)
+    }
   }
 
   private getStrategies(sdkConfig: SdkConfig): Record<string, Strategy> {
@@ -63,6 +68,7 @@ export default class RebuffSdk implements Rebuff {
     runHeuristicCheck = true,
     runVectorCheck = true,
     runLanguageModelCheck = true,
+    strategy = "",
   }: DetectRequest): Promise<DetectResponse> {
     if (userInputBase64) {
       // Create a buffer from the hexadecimal string
@@ -73,6 +79,27 @@ export default class RebuffSdk implements Rebuff {
     if (!userInput) {
       throw new RebuffError("userInput is required");
     }
+
+    if (strategy && !(strategy in this.strategies)) {
+      throw new RebuffError(`Unknown strategy: ${this.defaultStrategy}`)
+    }
+    strategy = strategy ?? this.defaultStrategy;
+    let injectionDetected = false;
+    let tacticResults: TacticResult[] = [];
+    for (const tactic of this.strategies[strategy].tactics) {
+      const score = await tactic.tactic.getScore(userInput);
+      const tacticResult = {
+        name: tactic.tactic.tacticName,
+        score: score,
+        threshold: tactic.scoreThreshold,
+        detected: score > tactic.scoreThreshold,
+      };
+      if (tacticResult.detected) {
+        injectionDetected = true;
+      }
+      tacticResults.push(tacticResult);
+    }
+
 
     
     if (typeof runHeuristicCheck !== "boolean") {
@@ -94,18 +121,11 @@ export default class RebuffSdk implements Rebuff {
       );
     }
 
-    runHeuristicCheck = runHeuristicCheck === null ? true : runHeuristicCheck;
     runVectorCheck = runVectorCheck === null ? true : runVectorCheck;
     runLanguageModelCheck =
       runLanguageModelCheck === null ? true : runLanguageModelCheck;
 
-    if (!userInput) {
-      throw new RebuffError("userInput is required");
-    }
 
-    const heuristicScore = runHeuristicCheck
-      ? detectPromptInjectionUsingHeuristicOnInput(userInput)
-      : 0;
 
     const modelScore = runLanguageModelCheck
       ? parseFloat(
@@ -126,22 +146,19 @@ export default class RebuffSdk implements Rebuff {
           await this.getVectorStore()
         )
       : { topScore: 0, countOverMaxVectorScore: 0 };
-    const injectionDetected =
-      heuristicScore > maxHeuristicScore ||
+    injectionDetected =
       modelScore > maxModelScore ||
       vectorScore.topScore > maxVectorScore;
 
     return {
-      heuristicScore,
       modelScore,
       vectorScore,
-      runHeuristicCheck,
       runVectorCheck,
       runLanguageModelCheck,
-      maxHeuristicScore,
       maxVectorScore,
       maxModelScore,
       injectionDetected,
+      tacticResults,
     } as DetectResponse;
   }
 

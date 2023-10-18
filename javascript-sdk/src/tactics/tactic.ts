@@ -1,3 +1,4 @@
 export default interface Tactic {
-    getScore(input: string): number;
+    tacticName: string;
+    getScore(input: string): Promise<number>;
 }
