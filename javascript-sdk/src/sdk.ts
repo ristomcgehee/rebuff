@@ -10,13 +10,14 @@ import initPinecone from "./lib/vectordb";
 import {
   callOpenAiToDetectPI,
   detectPiUsingVectorDatabase,
-  detectPromptInjectionUsingHeuristicOnInput,
 } from "./lib/detect";
 import getOpenAIInstance from "./lib/openai";
 import { renderPromptForPiDetection } from "./lib/prompts";
 import { OpenAIApi } from "openai";
 import { VectorStore } from "langchain/vectorstores/base";
 import { Document } from "langchain/document";
+import Strategy from "./strategies/strategy";
+import StandardStrategy from "./strategies/standard";
 
 function generateCanaryWord(length = 8): string {
   // Generate a secure random hexadecimal canary word
@@ -26,6 +27,8 @@ function generateCanaryWord(length = 8): string {
 export default class RebuffSdk implements Rebuff {
   private vectorStore: VectorStore | undefined;
   private sdkConfig: SdkConfig;
+  private strategies: Record<string, Strategy>;
+  private defaultStrategy: string;
 
   private openai: {
     conn: OpenAIApi;
@@ -38,6 +41,17 @@ export default class RebuffSdk implements Rebuff {
       conn: getOpenAIInstance(config.openai.apikey),
       model: config.openai.model || "gpt-3.5-turbo",
     };
+    this.strategies = this.getStrategies(this.sdkConfig);
+    this.defaultStrategy = this.sdkConfig.strategies?.default || "default";
+  }
+
+  private getStrategies(sdkConfig: SdkConfig): Record<string, Strategy> {
+    let strategies: Record<string, Strategy> = {};
+    const disabledStrategies = sdkConfig.strategies?.disabled ?? [];
+    if (!disabledStrategies.includes("standard")) {
+      strategies["standard"] = new StandardStrategy();
+    }
+    return strategies;
   }
 
   async detectInjection({
@@ -59,6 +73,8 @@ export default class RebuffSdk implements Rebuff {
     if (!userInput) {
       throw new RebuffError("userInput is required");
     }
+
+    
     if (typeof runHeuristicCheck !== "boolean") {
       throw new RebuffError("runHeuristicCheck must be a boolean");
     }
