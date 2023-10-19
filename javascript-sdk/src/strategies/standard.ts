@@ -12,7 +12,7 @@ export default class StandardStrategy implements Strategy {
     const vectorScoreThreshold = 0.9;
     this.tactics = [
       new Heuristic(heuristicScoreThreshold),
-      new Vector(vectorStore, vectorScoreThreshold),
+      new Vector(vectorScoreThreshold, vectorStore),
     ];
   }
 

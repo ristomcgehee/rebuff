@@ -1,17 +1,16 @@
 import { VectorStore } from "langchain/vectorstores/base";
-import { RebuffError } from "../interface";
-import Tactic, { TacticResult } from "./tactic";
+import { RebuffError, TacticResult } from "../interface";
+import Tactic from "./tactic";
 
 
-export default class Vector implements Tactic {
+export default class Vector extends Tactic {
   name = "vector";
 
   private vectorStore: VectorStore;
-  private similarityThreshold: number;
 
-  constructor(vectorStore: VectorStore, similarityThreshold: number) {
+  constructor(threshold: number, vectorStore: VectorStore) {
+    super(threshold);
     this.vectorStore = vectorStore;
-    this.similarityThreshold = similarityThreshold;
   }
 
   async execute(input: string): Promise<TacticResult> {
@@ -31,12 +30,12 @@ export default class Vector implements Tactic {
           topScore = score;
         }
   
-        if (score >= this.similarityThreshold && score > topScore) {
+        if (score >= this.threshold && score > topScore) {
           countOverMaxVectorScore++;
         }
       }
   
-      return { score: topScore, extraFields: { countOverMaxVectorScore } };
+      return this.getResult(topScore, { countOverMaxVectorScore });
     } catch (error) {
       throw new RebuffError(`Error in getting score for vector tactic: ${error}`);
     }

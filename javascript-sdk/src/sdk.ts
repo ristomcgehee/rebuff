@@ -90,18 +90,11 @@ export default class RebuffSdk implements Rebuff {
     let injectionDetected = false;
     let tacticResults: TacticResult[] = [];
     for (const tactic of strategies[strategy].tactics) {
-      const result = await tactic.tactic.execute(userInput);
-      const tacticResult = {
-        name: tactic.tactic.name,
-        score: result.score,
-        threshold: tactic.scoreThreshold,
-        detected: result.score > tactic.scoreThreshold,
-        extraFields: result.extraFields,
-      };
-      if (tacticResult.detected) {
+      const result = await tactic.execute(userInput);
+      if (result.detected) {
         injectionDetected = true;
       }
-      tacticResults.push(tacticResult);
+      tacticResults.push(result);
     }
 
 

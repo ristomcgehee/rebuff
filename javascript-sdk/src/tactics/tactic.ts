@@ -3,7 +3,7 @@ import { TacticResult } from "../interface";
 export default abstract class Tactic {
     abstract name: string;
 
-    private threshold: number;
+    protected threshold: number;
 
     constructor(threshold: number) {
         this.threshold = threshold;
