@@ -20,6 +20,7 @@ export interface TacticResult {
   score: number;
   threshold: number;
   detected: boolean;
+  extraFields?: Record<string, any>;
 }
 
 export interface DetectResponse {

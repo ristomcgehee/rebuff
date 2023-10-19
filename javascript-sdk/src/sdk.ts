@@ -27,9 +27,9 @@ function generateCanaryWord(length = 8): string {
 }
 
 export default class RebuffSdk implements Rebuff {
-  private vectorStore: VectorStore | undefined;
   private sdkConfig: SdkConfig;
-  private strategies: Record<string, Strategy>;
+  private vectorStore: VectorStore | undefined;
+  private strategies: Record<string, Strategy> | undefined;
   private defaultStrategy: string;
 
   private openai: {
@@ -43,18 +43,20 @@ export default class RebuffSdk implements Rebuff {
       conn: getOpenAIInstance(config.openai.apikey),
       model: config.openai.model || "gpt-3.5-turbo",
     };
-    this.strategies = this.getStrategies(this.sdkConfig);
     this.defaultStrategy = this.sdkConfig.strategies?.default || "standard";
-    if (!(this.defaultStrategy in this.strategies)) {
-      throw new RebuffError(`Default strategy "${this.defaultStrategy}" not present in enabled strategies.`)
-    }
   }
 
-  private getStrategies(sdkConfig: SdkConfig): Record<string, Strategy> {
+  private async getStrategies(sdkConfig: SdkConfig): Promise<Record<string, Strategy>> {
+    if (this.strategies) {
+      return this.strategies;
+    }
     let strategies: Record<string, Strategy> = {};
     const disabledStrategies = sdkConfig.strategies?.disabled ?? [];
     if (!disabledStrategies.includes("standard")) {
-      strategies["standard"] = new StandardStrategy();
+      strategies["standard"] = new StandardStrategy(await this.getVectorStore());
+    }
+    if (!(this.defaultStrategy in strategies)) {
+      throw new RebuffError(`Default strategy "${this.defaultStrategy}" not present in enabled strategies.`)
     }
     return strategies;
   }
@@ -80,19 +82,21 @@ export default class RebuffSdk implements Rebuff {
       throw new RebuffError("userInput is required");
     }
 
-    if (strategy && !(strategy in this.strategies)) {
+    const strategies = await this.getStrategies(this.sdkConfig);
+    if (strategy && !(strategy in strategies)) {
       throw new RebuffError(`Unknown strategy: ${this.defaultStrategy}`)
     }
     strategy = strategy ?? this.defaultStrategy;
     let injectionDetected = false;
     let tacticResults: TacticResult[] = [];
-    for (const tactic of this.strategies[strategy].tactics) {
-      const score = await tactic.tactic.getScore(userInput);
+    for (const tactic of strategies[strategy].tactics) {
+      const result = await tactic.tactic.execute(userInput);
       const tacticResult = {
-        name: tactic.tactic.tacticName,
-        score: score,
+        name: tactic.tactic.name,
+        score: result.score,
         threshold: tactic.scoreThreshold,
-        detected: score > tactic.scoreThreshold,
+        detected: result.score > tactic.scoreThreshold,
+        extraFields: result.extraFields,
       };
       if (tacticResult.detected) {
         injectionDetected = true;
@@ -139,23 +143,12 @@ export default class RebuffSdk implements Rebuff {
         )
       : 0;
 
-    const vectorScore = runVectorCheck
-      ? await detectPiUsingVectorDatabase(
-          userInput,
-          maxVectorScore,
-          await this.getVectorStore()
-        )
-      : { topScore: 0, countOverMaxVectorScore: 0 };
     injectionDetected =
-      modelScore > maxModelScore ||
-      vectorScore.topScore > maxVectorScore;
+      modelScore > maxModelScore;
 
     return {
       modelScore,
-      vectorScore,
-      runVectorCheck,
       runLanguageModelCheck,
-      maxVectorScore,
       maxModelScore,
       injectionDetected,
       tacticResults,
