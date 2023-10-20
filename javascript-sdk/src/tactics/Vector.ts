@@ -1,9 +1,9 @@
 import { VectorStore } from "langchain/vectorstores/base";
 import { RebuffError, TacticResult } from "../interface";
-import Tactic from "./tactic";
+import TacticClass from "./TacticClass";
 
 
-export default class Vector extends Tactic {
+export default class Vector extends TacticClass {
   name = "vector";
 
   private vectorStore: VectorStore;

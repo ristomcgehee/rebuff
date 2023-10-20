@@ -1,7 +1,7 @@
-import Tactic from './tactic';
 import stringSimilarity from "string-similarity";
 import { normalizeString } from "../lib/prompts";
 import { TacticResult } from '../interface';
+import TacticClass from './TacticClass';
 
 // TODO(risto): fix indentation
 
@@ -83,7 +83,7 @@ return injectionKeywords;
 // Generate and print the injection keywords
 const injectionKeywords = generateInjectionKeywords();
 
-export default class Heuristic extends Tactic {
+export default class Heuristic extends TacticClass {
     name = "heuristic";
 
     execute(input: string): Promise<TacticResult> {

@@ -1,6 +1,8 @@
 import { TacticResult } from "../interface";
+import Tactic from "./Tactic";
 
-export default abstract class Tactic {
+// TODO(risto): Pick a better name for this class
+export default abstract class TacticClass implements Tactic {
     abstract name: string;
 
     protected threshold: number;

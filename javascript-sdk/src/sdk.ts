@@ -4,22 +4,16 @@ import {
   Rebuff,
   RebuffError,
   TacticResult,
-  TacticStatus,
 } from "./interface";
 import crypto from "crypto";
 import { SdkConfig } from "./config";
 import initPinecone from "./lib/vectordb";
-import {
-  callOpenAiToDetectPI,
-  detectPiUsingVectorDatabase,
-} from "./lib/detect";
 import getOpenAIInstance from "./lib/openai";
-import { renderPromptForPiDetection } from "./lib/prompts";
 import { OpenAIApi } from "openai";
 import { VectorStore } from "langchain/vectorstores/base";
 import { Document } from "langchain/document";
-import Strategy from "./strategies/strategy";
-import StandardStrategy from "./strategies/standard";
+import Strategy from "./strategies/Strategy";
+import Standard from "./strategies/Standard";
 
 function generateCanaryWord(length = 8): string {
   // Generate a secure random hexadecimal canary word
@@ -53,7 +47,7 @@ export default class RebuffSdk implements Rebuff {
     let strategies: Record<string, Strategy> = {};
     const disabledStrategies = sdkConfig.strategies?.disabled ?? [];
     if (!disabledStrategies.includes("standard")) {
-      strategies["standard"] = new StandardStrategy(await this.getVectorStore());
+      strategies["standard"] = new Standard(await this.getVectorStore(), this.openai.conn, this.openai.model);
     }
     if (!(this.defaultStrategy in strategies)) {
       throw new RebuffError(`Default strategy "${this.defaultStrategy}" not present in enabled strategies.`)
@@ -97,52 +91,7 @@ export default class RebuffSdk implements Rebuff {
       tacticResults.push(result);
     }
 
-
-    
-    if (typeof runHeuristicCheck !== "boolean") {
-      throw new RebuffError("runHeuristicCheck must be a boolean");
-    }
-    if (typeof runVectorCheck !== "boolean") {
-      throw new RebuffError("runVectorCheck must be a boolean");
-    }
-    if (typeof runLanguageModelCheck !== "boolean") {
-      throw new RebuffError("runLanguageModelCheck must be a boolean");
-    }
-    if (
-      maxHeuristicScore === null ||
-      maxModelScore === null ||
-      maxVectorScore === null
-    ) {
-      throw new RebuffError(
-        "maxHeuristicScore, maxModelScore, and maxVectorScore are required"
-      );
-    }
-
-    runVectorCheck = runVectorCheck === null ? true : runVectorCheck;
-    runLanguageModelCheck =
-      runLanguageModelCheck === null ? true : runLanguageModelCheck;
-
-
-
-    const modelScore = runLanguageModelCheck
-      ? parseFloat(
-          (
-            await callOpenAiToDetectPI(
-              renderPromptForPiDetection(userInput),
-              this.openai.conn,
-              this.openai.model
-            )
-          ).completion
-        )
-      : 0;
-
-    injectionDetected =
-      modelScore > maxModelScore;
-
     return {
-      modelScore,
-      runLanguageModelCheck,
-      maxModelScore,
       injectionDetected,
       tacticResults,
     } as DetectResponse;
