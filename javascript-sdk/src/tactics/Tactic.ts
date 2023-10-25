@@ -1,5 +1,10 @@
-import { TacticResult } from "../interface";
+export interface TacticExecution {
+    score: number;
+    extraFields?: Record<string, any>;
+}
 
 export default interface Tactic {
-    execute(input: string): Promise<TacticResult>;
+    name: string;
+    defaultThreshold: number;
+    execute(input: string, thresholdOverride?: number): Promise<TacticExecution>;
 }

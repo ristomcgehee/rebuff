@@ -58,13 +58,8 @@ export default class RebuffSdk implements Rebuff {
   async detectInjection({
     userInput = "",
     userInputBase64 = "",
-    maxHeuristicScore = 0.75,
-    maxVectorScore = 0.9,
-    maxModelScore = 0.9,
-    runHeuristicCheck = true,
-    runVectorCheck = true,
-    runLanguageModelCheck = true,
     strategy = "",
+    tacticOverrides = [],
   }: DetectRequest): Promise<DetectResponse> {
     if (userInputBase64) {
       // Create a buffer from the hexadecimal string
@@ -84,7 +79,19 @@ export default class RebuffSdk implements Rebuff {
     let injectionDetected = false;
     let tacticResults: TacticResult[] = [];
     for (const tactic of strategies[strategy].tactics) {
-      const result = await tactic.execute(userInput);
+      const tacticOverride = tacticOverrides.find(t => t.name === tactic.name);
+      if (tacticOverride && tacticOverride.run === false) {
+        continue;
+      }
+      const threshold = tacticOverride?.threshold ?? tactic.defaultThreshold;
+      const execution = await tactic.execute(userInput, threshold);
+      const result = {
+        name: tactic.name,
+        score: execution.score,
+        threshold,
+        detected: execution.score > threshold,
+        extraFields: execution.extraFields ?? [],
+      } as TacticResult;
       if (result.detected) {
         injectionDetected = true;
       }
@@ -94,6 +101,7 @@ export default class RebuffSdk implements Rebuff {
     return {
       injectionDetected,
       tacticResults,
+      strategy,
     } as DetectResponse;
   }
 

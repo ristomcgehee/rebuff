@@ -116,16 +116,8 @@ export const AppProvider: FC<{ children: ReactNode }> = ({ children }) => {
       const data = (await response.json()) as PromptResponse;
       const {
         detection = {
-          runHeuristicCheck: false,
-          runLanguageModelCheck: false,
-          runVectorCheck: false,
-          vectorScore: {},
-          heuristicScore: 0,
-          modelScore: 0,
-          maxHeuristicScore: 0,
-          maxModelScore: 0,
-          maxVectorScore: 0,
           injectionDetected: false,
+          tacticResults: [],
         } as DetectResponse,
         output = "",
         breach = false,
@@ -158,16 +150,8 @@ export const AppProvider: FC<{ children: ReactNode }> = ({ children }) => {
           input: prompt.userInput || "",
           breach: false,
           detection: {
-            runHeuristicCheck: false,
-            runLanguageModelCheck: false,
-            runVectorCheck: false,
-            vectorScore: {},
-            heuristicScore: 0,
-            modelScore: 0,
-            maxHeuristicScore: 0,
-            maxModelScore: 0,
-            maxVectorScore: 0,
             injectionDetected: false,
+            tacticResults: [],
           },
           output: "",
           // eslint-disable-next-line camelcase, @typescript-eslint/naming-convention

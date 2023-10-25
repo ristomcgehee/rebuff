@@ -1,23 +1,23 @@
-import { VectorStore } from "langchain/vectorstores/base";
-import { RebuffError, TacticResult } from "../interface";
-import TacticClass from "./TacticClass";
+import { RebuffError } from "../interface";
 import { OpenAIApi } from "openai";
 import { renderPromptForPiDetection } from "../lib/prompts";
+import Tactic, { TacticExecution } from "./Tactic";
 
 
-export default class OpenAI extends TacticClass {
+export default class OpenAI implements Tactic {
   private openai: OpenAIApi;
   private model: string;
   public name: string;
+  public defaultThreshold: number;
 
-  constructor(threshold: number, openai: OpenAIApi, model: string) {
-    super(threshold);
-    this.openai = openai;
+  constructor(threshold: number, model: string, openai: OpenAIApi) {
+    this.defaultThreshold = threshold;
     this.model = model;
+    this.openai = openai;
     this.name = "openai_" + model.replaceAll("-", "_");
   }
 
-  async execute(input: string): Promise<TacticResult> {
+  async execute(input: string): Promise<TacticExecution> {
     try {
       const completion = await this.openai.createChatCompletion({
         model: this.model,
@@ -33,7 +33,7 @@ export default class OpenAI extends TacticClass {
 
       // FIXME: Handle when parseFloat returns NaN.
       const score = parseFloat(completion.data.choices[0].message.content || "");
-      return this.getResult(score);
+      return { score } as TacticExecution;
     } catch (error) {
       console.error("Error in callOpenAiToDetectPI:", error);
       throw new RebuffError("Error in getting score for large language model");

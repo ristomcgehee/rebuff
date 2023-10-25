@@ -1,19 +1,21 @@
 import { VectorStore } from "langchain/vectorstores/base";
-import { RebuffError, TacticResult } from "../interface";
-import TacticClass from "./TacticClass";
+import { RebuffError } from "../interface";
+import Tactic, { TacticExecution } from "./Tactic";
 
 
-export default class Vector extends TacticClass {
+export default class Vector implements Tactic {
   name = "vector";
+  defaultThreshold: number;
 
   private vectorStore: VectorStore;
 
   constructor(threshold: number, vectorStore: VectorStore) {
-    super(threshold);
+    this.defaultThreshold = threshold;
     this.vectorStore = vectorStore;
   }
 
-  async execute(input: string): Promise<TacticResult> {
+  async execute(input: string, thresholdOverride?: number): Promise<TacticExecution> {
+    const threshold = thresholdOverride || this.defaultThreshold;
     try {
       const topK = 20;
       const results = await this.vectorStore.similaritySearchWithScore(input, topK);
@@ -30,12 +32,12 @@ export default class Vector extends TacticClass {
           topScore = score;
         }
   
-        if (score >= this.threshold && score > topScore) {
+        if (score >= threshold && score > topScore) {
           countOverMaxVectorScore++;
         }
       }
   
-      return this.getResult(topScore, { countOverMaxVectorScore });
+      return { score: topScore, extraFields: { countOverMaxVectorScore } } as TacticExecution;
     } catch (error) {
       throw new RebuffError(`Error in getting score for vector tactic: ${error}`);
     }

@@ -1,7 +1,6 @@
 import stringSimilarity from "string-similarity";
 import { normalizeString } from "../lib/prompts";
-import { TacticResult } from '../interface';
-import TacticClass from './TacticClass';
+import Tactic, { TacticExecution } from "./Tactic";
 
 // TODO(risto): fix indentation
 
@@ -83,10 +82,15 @@ return injectionKeywords;
 // Generate and print the injection keywords
 const injectionKeywords = generateInjectionKeywords();
 
-export default class Heuristic extends TacticClass {
+export default class Heuristic implements Tactic {
     name = "heuristic";
+    defaultThreshold: number;
 
-    execute(input: string): Promise<TacticResult> {
+    constructor(threshold: number) {
+        this.defaultThreshold = threshold;
+    }
+
+    execute(input: string): Promise<TacticExecution> {
         let highestScore = 0;
         const normalizedInput = normalizeString(input);
 
@@ -130,6 +134,6 @@ export default class Heuristic extends TacticClass {
             }
         }
         
-        return Promise.resolve(this.getResult(highestScore));
+        return Promise.resolve({ score: highestScore } as TacticExecution);
     }
 }
