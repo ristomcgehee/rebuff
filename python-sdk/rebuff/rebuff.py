@@ -1,37 +1,54 @@
 import secrets
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, List
 
 import requests
 from pydantic import BaseModel
 
+class TacticOverride(BaseModel):
+    # The name of the tactic to override. The names of the tactics are:
+    # * "heuristic"
+    # * "vector_db"
+    # * "language_model"
+    name: str
+    # The threshold to use for this tactic. If the score is above this threshold, the tactic will be considered 
+    # detected. If not specified, the default threshold for the tactic will be used.
+    threshold: float = None
+    # Whether to run this tactic.
+    run: bool = True
+
 
 class DetectApiRequest(BaseModel):
+    # The user input to check for prompt injection.
     userInput: str
+    # The base64-encoded user input. If this is specified, the user input will be ignored.
     userInputBase64: Optional[str] = None
-    runHeuristicCheck: bool
-    runVectorCheck: bool
-    runLanguageModelCheck: bool
-    maxHeuristicScore: float
-    maxModelScore: float
-    maxVectorScore: float
+    # Any tactics to change behavior for. If any tactic is not specified, the default threshold for that tactic will be
+    # used.
+    tacticOverrides: List[TacticOverride] = []
+
+
+class TacticResult(BaseModel):
+    # The name of the tactic.
+    name: str
+    # The score for the tactic. This is a number between 0 and 1. The closer to 1, the more likely that this is a
+    # prompt injection attempt.
+    score: float
+    # Whether this tactic evaluated the input as a prompt injection attempt.
+    detected: bool
+    # The threshold used for this tactic. If the score is above this threshold, the tactic will be considered detected.
+    threshold: float
+    # Some tactics return additional fields:
+    # * "vector_db":
+    #   - "countOverMaxVectorScore" (int): The number of different vectors whose similarity score is above the 
+    #       threshold.
+    additionalFields: Dict[str, Any]
 
 
 class DetectApiSuccessResponse(BaseModel):
-    heuristicScore: float
-    modelScore: float
-    vectorScore: Dict[str, float]
-    runHeuristicCheck: bool
-    runVectorCheck: bool
-    runLanguageModelCheck: bool
-    maxHeuristicScore: float
-    maxModelScore: float
-    maxVectorScore: float
+    # Whether prompt injection was detected.
     injectionDetected: bool
-
-
-class ApiFailureResponse(BaseModel):
-    error: str
-    message: str
+    # The result for each tactic that was executed.
+    tacticResults: List[TacticResult]
 
 
 class Rebuff:
@@ -46,38 +63,37 @@ class Rebuff:
     def detect_injection(
         self,
         user_input: str,
-        max_heuristic_score: float = 0.75,
-        max_vector_score: float = 0.90,
-        max_model_score: float = 0.9,
-        check_heuristic: bool = True,
-        check_vector: bool = True,
-        check_llm: bool = True,
-    ) -> Union[DetectApiSuccessResponse, ApiFailureResponse]:
+        tactic_overrides: List[TacticOverride] = [],
+    ) -> DetectApiSuccessResponse:
         """
         Detects if the given user input contains an injection attempt.
 
         Args:
             user_input (str): The user input to be checked for injection.
-            max_heuristic_score (float, optional): The maximum heuristic score allowed. Defaults to 0.75.
-            max_vector_score (float, optional): The maximum vector score allowed. Defaults to 0.90.
-            max_model_score (float, optional): The maximum model (LLM) score allowed. Defaults to 0.9.
-            check_heuristic (bool, optional): Whether to run the heuristic check. Defaults to True.
-            check_vector (bool, optional): Whether to run the vector check. Defaults to True.
-            check_llm (bool, optional): Whether to run the language model check. Defaults to True.
+            tactic_overrides (List[TacticOverride], optional): Any tactics to change the behavior for. These are the
+                thresholds for the default tactics:
+                - "heuristic": 0.75
+                - "language_model": 0.9
+                - "vector_db": 0.9
 
         Returns:
-            Tuple[Union[DetectApiSuccessResponse, ApiFailureResponse], bool]: A tuple containing the detection
-                metrics and a boolean indicating if an injection was detected.
+            DetectApiSuccessResponse: An object containing the detection results, including the scores for each tactic
+                and a boolean indicating if an injection was detected.
+                        
+        Examples:
+            >>> detection_response = rebuff.detect_injection(user_input, [
+            ...     TacticOverride(name="heuristic", threshold=0.85),
+            ...     TacticOverride(name="language_model", threshold=0.7),
+            ...     TacticOverride(name="vector_db", run=False),
+            ... ])
+
+            >>> if detection_response.injectionDetected:
+            ...     print("Possible injection detected. Take corrective action.")
         """
         request_data = DetectApiRequest(
             userInput=user_input,
             userInputBase64=encode_string(user_input),
-            runHeuristicCheck=check_heuristic,
-            runVectorCheck=check_vector,
-            runLanguageModelCheck=check_llm,
-            maxVectorScore=max_vector_score,
-            maxModelScore=max_model_score,
-            maxHeuristicScore=max_heuristic_score,
+            tacticOverrides=tactic_overrides,
         )
 
         response = requests.post(
@@ -89,20 +105,8 @@ class Rebuff:
         response.raise_for_status()
 
         response_json = response.json()
-        success_response = DetectApiSuccessResponse.parse_obj(response_json)
+        return DetectApiSuccessResponse.parse_obj(response_json)
 
-        if (
-            success_response.heuristicScore > max_heuristic_score
-            or success_response.modelScore > max_model_score
-            or success_response.vectorScore["topScore"] > max_vector_score
-        ):
-            # Injection detected
-            success_response.injectionDetected = True
-            return success_response
-        else:
-            # No injection detected
-            success_response.injectionDetected = False
-            return success_response
 
     @staticmethod
     def generate_canary_word(length: int = 8) -> str:
