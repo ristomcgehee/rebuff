@@ -1,18 +1,26 @@
 import secrets
-from typing import Any, Dict, Optional, Tuple, List
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 from pydantic import BaseModel
 
+
+class TacticName(Enum):
+    # A series of heuristics are used to determine whether the input is prompt injection.
+    HEURISTIC = "heuristic"
+    # A language model is asked if the input appears to be prompt injection.
+    VECTOR_DB = "vector_db"
+    # A vector database of known prompt injection attacks is queried for similarity.
+    LANGUAGE_MODEL = "language_model"
+
+
 class TacticOverride(BaseModel):
-    # The name of the tactic to override. The names of the tactics are:
-    # * "heuristic"
-    # * "vector_db"
-    # * "language_model"
-    name: str
-    # The threshold to use for this tactic. If the score is above this threshold, the tactic will be considered 
+    # The name of the tactic to override.
+    name: TacticName
+    # The threshold to use for this tactic. If the score is above this threshold, the tactic will be considered
     # detected. If not specified, the default threshold for the tactic will be used.
-    threshold: float = None
+    threshold: Optional[float] = None
     # Whether to run this tactic.
     run: bool = True
 
@@ -29,7 +37,7 @@ class DetectApiRequest(BaseModel):
 
 class TacticResult(BaseModel):
     # The name of the tactic.
-    name: str
+    name: TacticName
     # The score for the tactic. This is a number between 0 and 1. The closer to 1, the more likely that this is a
     # prompt injection attempt.
     score: float
@@ -39,7 +47,7 @@ class TacticResult(BaseModel):
     threshold: float
     # Some tactics return additional fields:
     # * "vector_db":
-    #   - "countOverMaxVectorScore" (int): The number of different vectors whose similarity score is above the 
+    #   - "countOverMaxVectorScore" (int): The number of different vectors whose similarity score is above the
     #       threshold.
     additionalFields: Dict[str, Any]
 
@@ -52,7 +60,9 @@ class DetectApiSuccessResponse(BaseModel):
 
 
 class Rebuff:
-    def __init__(self, api_token: str, api_url: str = "https://playground.rebuff.ai"):
+    def __init__(
+        self, api_token: str, api_url: str = "https://playground.rebuff.ai"
+    ):
         self.api_token = api_token
         self.api_url = api_url
         self._headers = {
@@ -79,12 +89,12 @@ class Rebuff:
         Returns:
             DetectApiSuccessResponse: An object containing the detection results, including the scores for each tactic
                 and a boolean indicating if an injection was detected.
-                        
+
         Examples:
             >>> detection_response = rebuff.detect_injection(user_input, [
-            ...     TacticOverride(name="heuristic", threshold=0.85),
-            ...     TacticOverride(name="language_model", threshold=0.7),
-            ...     TacticOverride(name="vector_db", run=False),
+            ...     TacticOverride(name=TacticName.HEURISTIC, threshold=0.85),
+            ...     TacticOverride(name=TacticName.LANGUAGE_MODEL, threshold=0.7),
+            ...     TacticOverride(name=TacticName.VECTOR_DB, run=False),
             ... ])
 
             >>> if detection_response.injectionDetected:
@@ -106,7 +116,6 @@ class Rebuff:
 
         response_json = response.json()
         return DetectApiSuccessResponse.parse_obj(response_json)
-
 
     @staticmethod
     def generate_canary_word(length: int = 8) -> str:
@@ -190,7 +199,9 @@ class Rebuff:
             return True
         return False
 
-    def log_leakage(self, user_input: str, completion: str, canary_word: str) -> None:
+    def log_leakage(
+        self, user_input: str, completion: str, canary_word: str
+    ) -> None:
         """
         Logs the leakage of a canary word.
 

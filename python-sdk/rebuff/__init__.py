@@ -1,8 +1,4 @@
-from .rebuff import (
-    DetectApiRequest,
-    DetectApiSuccessResponse,
-    Rebuff,
-)
+from .rebuff import DetectApiRequest, DetectApiSuccessResponse, Rebuff
 
 __all__ = [
     "Rebuff",

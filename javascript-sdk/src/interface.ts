@@ -1,6 +1,9 @@
 export enum TacticName {
+  // A series of heuristics are used to determine whether the input is prompt injection.
   Heuristic = "heuristic",
+  // A language model is asked if the input appears to be prompt injection.
   LanguageModel = "language_model",
+  // A vector database of known prompt injection attacks is queried for similarity.
   VectorDB = "vector_db",
 }
 
