@@ -3,6 +3,7 @@ import {
   DetectResponse,
   Rebuff,
   RebuffError,
+  TacticResult,
 } from "./interface";
 import crypto from "crypto";
 import { SdkConfig } from "./config";
@@ -13,10 +14,11 @@ import {
   detectPromptInjectionUsingHeuristicOnInput,
 } from "./lib/detect";
 import getOpenAIInstance from "./lib/openai";
-import { renderPromptForPiDetection } from "./lib/prompts";
 import { OpenAIApi } from "openai";
 import { VectorStore } from "langchain/vectorstores/base";
 import { Document } from "langchain/document";
+import Strategy from "./strategies/Strategy";
+import Standard from "./strategies/Standard";
 
 function generateCanaryWord(length = 8): string {
   // Generate a secure random hexadecimal canary word
@@ -24,8 +26,10 @@ function generateCanaryWord(length = 8): string {
 }
 
 export default class RebuffSdk implements Rebuff {
-  private vectorStore: VectorStore | undefined;
   private sdkConfig: SdkConfig;
+  private vectorStore: VectorStore | undefined;
+  private strategies: Record<string, Strategy> | undefined;
+  private defaultStrategy: string;
 
   private openai: {
     conn: OpenAIApi;
@@ -38,17 +42,24 @@ export default class RebuffSdk implements Rebuff {
       conn: getOpenAIInstance(config.openai.apikey),
       model: config.openai.model || "gpt-3.5-turbo",
     };
+    this.defaultStrategy = "standard";
+  }
+
+  private async getStrategies(): Promise<Record<string, Strategy>> {
+    if (this.strategies) {
+      return this.strategies;
+    }
+    const strategies: Record<string, Strategy> = {
+      // For now, this is the only strategy.
+      "standard": new Standard(await this.getVectorStore(), this.openai.conn, this.openai.model),
+    };
+    return strategies;
   }
 
   async detectInjection({
     userInput = "",
     userInputBase64 = "",
-    maxHeuristicScore = 0.75,
-    maxVectorScore = 0.9,
-    maxModelScore = 0.9,
-    runHeuristicCheck = true,
-    runVectorCheck = true,
-    runLanguageModelCheck = true,
+    tacticOverrides = [],
   }: DetectRequest): Promise<DetectResponse> {
     if (userInputBase64) {
       // Create a buffer from the hexadecimal string
@@ -59,73 +70,33 @@ export default class RebuffSdk implements Rebuff {
     if (!userInput) {
       throw new RebuffError("userInput is required");
     }
-    if (typeof runHeuristicCheck !== "boolean") {
-      throw new RebuffError("runHeuristicCheck must be a boolean");
-    }
-    if (typeof runVectorCheck !== "boolean") {
-      throw new RebuffError("runVectorCheck must be a boolean");
-    }
-    if (typeof runLanguageModelCheck !== "boolean") {
-      throw new RebuffError("runLanguageModelCheck must be a boolean");
-    }
-    if (
-      maxHeuristicScore === null ||
-      maxModelScore === null ||
-      maxVectorScore === null
-    ) {
-      throw new RebuffError(
-        "maxHeuristicScore, maxModelScore, and maxVectorScore are required"
-      );
-    }
 
-    runHeuristicCheck = runHeuristicCheck === null ? true : runHeuristicCheck;
-    runVectorCheck = runVectorCheck === null ? true : runVectorCheck;
-    runLanguageModelCheck =
-      runLanguageModelCheck === null ? true : runLanguageModelCheck;
-
-    if (!userInput) {
-      throw new RebuffError("userInput is required");
+    const strategies = await this.getStrategies();
+    let injectionDetected = false;
+    let tacticResults: TacticResult[] = [];
+    for (const tactic of strategies[this.defaultStrategy].tactics) {
+      const tacticOverride = tacticOverrides.find(t => t.name === tactic.name);
+      if (tacticOverride && tacticOverride.run === false) {
+        continue;
+      }
+      const threshold = tacticOverride?.threshold ?? tactic.defaultThreshold;
+      const execution = await tactic.execute(userInput, threshold);
+      const result = {
+        name: tactic.name,
+        score: execution.score,
+        threshold,
+        detected: execution.score > threshold,
+        additionalFields: execution.additionalFields ?? {},
+      } as TacticResult;
+      if (result.detected) {
+        injectionDetected = true;
+      }
+      tacticResults.push(result);
     }
-
-    const heuristicScore = runHeuristicCheck
-      ? detectPromptInjectionUsingHeuristicOnInput(userInput)
-      : 0;
-
-    const modelScore = runLanguageModelCheck
-      ? parseFloat(
-          (
-            await callOpenAiToDetectPI(
-              renderPromptForPiDetection(userInput),
-              this.openai.conn,
-              this.openai.model
-            )
-          ).completion
-        )
-      : 0;
-
-    const vectorScore = runVectorCheck
-      ? await detectPiUsingVectorDatabase(
-          userInput,
-          maxVectorScore,
-          await this.getVectorStore()
-        )
-      : { topScore: 0, countOverMaxVectorScore: 0 };
-    const injectionDetected =
-      heuristicScore > maxHeuristicScore ||
-      modelScore > maxModelScore ||
-      vectorScore.topScore > maxVectorScore;
 
     return {
-      heuristicScore,
-      modelScore,
-      vectorScore,
-      runHeuristicCheck,
-      runVectorCheck,
-      runLanguageModelCheck,
-      maxHeuristicScore,
-      maxVectorScore,
-      maxModelScore,
       injectionDetected,
+      tacticResults,
     } as DetectResponse;
   }
 
