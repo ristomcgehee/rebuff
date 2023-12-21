@@ -6,7 +6,7 @@ import requests
 from pydantic import BaseModel
 
 
-class TacticName(Enum):
+class TacticName(str, Enum):
     # A series of heuristics are used to determine whether the input is prompt injection.
     HEURISTIC = "heuristic"
     # A language model is asked if the input appears to be prompt injection.

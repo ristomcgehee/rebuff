@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-expressions */
 import { describe } from "mocha";
 import { expect } from "chai";
-import { DetectRequest, DetectResponse } from "../src/interface";
+import { DetectRequest, DetectResponse, TacticName, TacticResult } from "../src/interface";
 import RebuffSDK from "../src/sdk";
 import { getEnvironmentVariable } from "./helpers";
 
@@ -47,39 +47,37 @@ describe("Rebuff API tests", function () {
       const request: DetectRequest = {
         userInput: "abc",
         userInputBase64: "abc",
-        runHeuristicCheck: true,
-        runVectorCheck: false,
-        runLanguageModelCheck: true,
-        maxHeuristicScore: 0.5,
-        maxModelScore: 0.8,
-        maxVectorScore: 0.0,
+        tacticOverrides: [],
       };
 
       expect(request).to.have.property("userInputBase64");
-      expect(request).to.have.property("runHeuristicCheck");
-      expect(request).to.have.property("runVectorCheck");
-      expect(request).to.have.property("runLanguageModelCheck");
-      expect(request).to.have.property("maxHeuristicScore");
-      expect(request).to.have.property("maxModelScore");
-      expect(request).to.have.property("maxVectorScore");
+      expect(request).to.have.property("tacticOverrides");
     });
   });
 
   describe("DetectResponse", () => {
     it("should have the correct properties", () => {
       const response: DetectResponse = {
-        heuristicScore: 0.5,
-        modelScore: 0.8,
-        vectorScore: { abc: 0.9 },
-        runHeuristicCheck: true,
-        runVectorCheck: false,
-        runLanguageModelCheck: true,
-        maxHeuristicScore: 0.5,
-        maxModelScore: 0.8,
-        maxVectorScore: 0.0,
         injectionDetected: false,
+        tacticResults: [
+          {
+            name: TacticName.Heuristic,
+            score: 0.5,
+            detected: false,
+            threshold: 0.9,
+            additionalFields: {},
+          },
+          {
+            name: TacticName.LanguageModel,
+            score: 0.8,
+            detected: false,
+            threshold: 0.9,
+            additionalFields: {},
+          }
+        ],
       };
 
+      // TODO(risto): use correct properties
       expect(response).to.have.property("heuristicScore");
       expect(response).to.have.property("modelScore");
       expect(response).to.have.property("vectorScore");
