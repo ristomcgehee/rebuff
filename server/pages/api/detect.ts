@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import Cors from "cors";
 import { rebuff } from "@/lib/rebuff";
-import { TacticOverride } from "@rebuff";
+import { TacticOverride } from "rebuff";
 import {
   runMiddleware,
   checkApiKeyAndReduceBalance,

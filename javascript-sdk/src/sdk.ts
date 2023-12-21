@@ -8,11 +8,6 @@ import {
 import crypto from "crypto";
 import { SdkConfig } from "./config";
 import initVectorStore from "./lib/vectordb";
-import {
-  callOpenAiToDetectPI,
-  detectPiUsingVectorDatabase,
-  detectPromptInjectionUsingHeuristicOnInput,
-} from "./lib/detect";
 import getOpenAIInstance from "./lib/openai";
 import { OpenAIApi } from "openai";
 import { VectorStore } from "langchain/vectorstores/base";
