@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - custom-detection-strategies # XXX
   pull_request_target:
     types:
       - opened
