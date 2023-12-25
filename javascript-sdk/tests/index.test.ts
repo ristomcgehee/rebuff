@@ -1,9 +1,13 @@
 /* eslint-disable @typescript-eslint/no-unused-expressions */
 import { describe } from "mocha";
-import { expect } from "chai";
-import { DetectRequest, DetectResponse, TacticName } from "../src/interface";
+import chai from "chai";
+import chaiAsPromised from "chai-as-promised";
+import { DetectRequest, DetectResponse, TacticName, TacticResult } from "../src/interface";
 import RebuffSDK from "../src/sdk";
 import { getEnvironmentVariable } from "./helpers";
+
+chai.use(chaiAsPromised);
+const expect = chai.expect;
 
 // Initialize the Rebuff SDK with a real API token and URL
 const rb = await RebuffSDK.init({
@@ -441,6 +445,16 @@ describe("Rebuff API tests", function () {
         });
         expect(detectResponse.injectionDetected).to.be.false;
       });
+    });
+  });
+
+  describe("detect_injection_invalid_strategy", () => {
+
+    it("should throw an error", async () => {
+      expect(rb.detectInjection({
+        userInput: benign_inputs[0],
+        strategy: "badStrategy",
+      })).to.be.rejected;
     });
   });
 });

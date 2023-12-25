@@ -10,8 +10,8 @@ export enum TacticName {
 export interface TacticOverride {
   // The name of the tactic to override.
   name: TacticName;
-  // The threshold to use for this tactic. If the score is above this threshold, the tactic will be considered detected.
-  // If not specified, the default threshold for the tactic will be used.
+  // The threshold to use for this tactic, between 0 and 1, inclusive. If the score is above this threshold, the tactic
+  // will be considered detected. If not specified, the default threshold for the tactic will be used.
   threshold?: number;
   // Whether to run this tactic. Defaults to true if not specified.
   run?: boolean;
@@ -22,8 +22,12 @@ export interface DetectRequest {
   userInput: string;
   // The base64-encoded user input. If this is specified, the user input will be ignored.
   userInputBase64?: string;
+  // Which pre-defined strategy to use. A strategy is simply a collection of tactics. If not specified, the default
+  // strategy will be used.
+  strategy?: string;
   // Any tactics to change behavior for. If any tactic is not specified, the default threshold for that tactic will be
-  // used.
+  // used. If a tactic override is included for a tactic that is not a part of the specified stratedy, that tactic
+  // override will be ignored.
   tacticOverrides?: TacticOverride[];
 }
 
