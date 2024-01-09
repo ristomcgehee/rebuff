@@ -1,5 +1,7 @@
+import datetime
 from openai import OpenAI
 from typing import Dict
+from wandb.sdk.data_types.trace_tree import Trace
 
 
 def render_prompt_for_pi_detection(user_input: str) -> str:
@@ -67,10 +69,42 @@ def call_openai_to_detect_pi(
 
     """
     client = OpenAI(api_key=api_key)
+    start_time_ms = datetime.datetime.now().timestamp() * 1000
+    temperature = 1.0
 
-    completion = client.chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": prompt_to_detect_pi_using_openai}],
+    try:
+        completion = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt_to_detect_pi_using_openai}],
+            temperature=temperature,
+        )
+        end_time_ms = round(datetime.datetime.now().timestamp() * 1000)  # logged in milliseconds
+        status="success"
+        status_message=None,
+        response = {"completion": completion.choices[0].message.content}
+        response_text = response["completion"]
+        token_usage = completion.usage.dict()
+      
+    
+    except Exception as e:
+        end_time_ms = round(datetime.datetime.now().timestamp() * 1000)  # logged in milliseconds
+        status="error"
+        status_message=str(e)
+        response_text = ""
+        token_usage = {}
+
+    root_span = Trace(
+        name="root_span",
+        kind="llm",  # kind can be "llm", "chain", "agent" or "tool"
+        status_code=status,
+        status_message=status_message,
+        metadata={"temperature": temperature,
+                "token_usage": token_usage, 
+                "model_name": model},
+        start_time_ms=start_time_ms,
+        end_time_ms=end_time_ms,
+        inputs={"system_prompt": "", "query": prompt_to_detect_pi_using_openai},
+        outputs={"response": response_text},
     )
 
     if completion.choices[0].message.content is None:
@@ -80,4 +114,9 @@ def call_openai_to_detect_pi(
         raise Exception("server error")
 
     response = {"completion": completion.choices[0].message.content}
+
+    
+    # log the span to wandb
+    root_span.log(name="openai_trace")
+
     return response
