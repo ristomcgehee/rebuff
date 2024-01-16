@@ -1,8 +1,10 @@
 from .rebuff import (
-    ApiFailureResponse,
     DetectApiRequest,
     DetectApiSuccessResponse,
     Rebuff,
+    TacticName,
+    TacticOverride,
+    TacticResult,
 )
 
 from .sdk import RebuffSdk, RebuffDetectionResponse
@@ -10,8 +12,10 @@ from .sdk import RebuffSdk, RebuffDetectionResponse
 __all__ = [
     "Rebuff",
     "DetectApiSuccessResponse",
-    "ApiFailureResponse",
     "DetectApiRequest",
     "RebuffSdk",
     "RebuffDetectionResponse",
+    "TacticName",
+    "TacticOverride",
+    "TacticResult",
 ]

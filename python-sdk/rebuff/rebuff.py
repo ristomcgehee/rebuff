@@ -1,32 +1,115 @@
+from enum import Enum
 import secrets
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import List, Optional, Dict, Any
 
 import requests
 from pydantic import BaseModel
 
 
-class DetectApiRequest(BaseModel):
-    userInput: str
-    userInputBase64: Optional[str] = None
-    runHeuristicCheck: bool
-    runVectorCheck: bool
-    runLanguageModelCheck: bool
-    maxHeuristicScore: float
-    maxModelScore: float
-    maxVectorScore: float
+class TacticName(Enum):
+  HEURISTIC = "heuristic"
+  """
+  A series of heuristics are used to determine whether the input is prompt injection.
+  """
+  
+  LANGUAGE_MODEL = "language_model"
+  """
+  A language model is asked if the input appears to be prompt injection.
+  """
 
+  VECTOR_DB = "vector_db"
+  """
+  A vector database of known prompt injection attacks is queried for similarity.
+  """
 
-class DetectApiSuccessResponse(BaseModel):
-    heuristicScore: float
-    modelScore: float
-    vectorScore: Dict[str, float]
-    runHeuristicCheck: bool
-    runVectorCheck: bool
-    runLanguageModelCheck: bool
-    maxHeuristicScore: float
-    maxModelScore: float
-    maxVectorScore: float
-    injectionDetected: bool
+class TacticOverride(BaseModel):
+  """
+  Override settings for a specific tactic.
+  """
+
+  name: TacticName
+  """
+  The name of the tactic to override.
+  """
+
+  threshold: Optional[float]
+  """
+  The threshold to use for this tactic. If the score is above this threshold, the tactic will be considered detected.
+  If not specified, the default threshold for the tactic will be used.
+  """
+
+  run: Optional[bool]
+  """
+  Whether to run this tactic. Defaults to true if not specified.
+  """
+
+class DetectRequest(BaseModel):
+  """
+  Request to detect prompt injection.
+  """
+
+  userInput: str
+  """
+  The user input to check for prompt injection.
+  """
+
+  userInputBase64: Optional[str]
+  """
+  The base64-encoded user input. If this is specified, the user input will be ignored.
+  """
+
+  tacticOverrides: Optional[List[TacticOverride]]
+  """
+  Any tactics to change behavior for. If any tactic is not specified, the default threshold for that tactic will be used.
+  """
+
+class TacticResult(BaseModel):
+  """
+  Result of a tactic execution.
+  """
+
+  name: str
+  """
+  The name of the tactic.
+  """
+
+  score: float
+  """
+  The score for the tactic. This is a number between 0 and 1. The closer to 1, the more likely that this is a prompt injection attempt.
+  """
+
+  detected: bool
+  """
+  Whether this tactic evaluated the input as a prompt injection attempt.
+  """
+
+  threshold: float
+  """
+  The threshold used for this tactic. If the score is above this threshold, the tactic will be considered detected.
+  """
+
+  additionalFields: Dict[str, Any]
+  """
+  Some tactics return additional fields:
+    * "vector_db":
+      - "countOverMaxVectorScore" (number): The number of different vectors whose similarity score is above the 
+          threshold.
+  """
+
+class DetectResponse(BaseModel):
+  """
+  Response from a prompt injection detection request.
+  """
+
+  injectionDetected: bool
+  """
+  Whether prompt injection was detected.
+  """
+
+  tacticResults: List[TacticResult]
+  """
+  The result for each tactic that was executed.
+  """
 
 
 class ApiFailureResponse(BaseModel):
