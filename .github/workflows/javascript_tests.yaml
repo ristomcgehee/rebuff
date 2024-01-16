@@ -18,7 +18,7 @@ jobs:
     if: |
       (contains(github.event.pull_request.labels.*.name, 'okay-to-test') && github.event.action == 'labeled') ||
       contains(fromJson('["MEMBER", "COLLABORATOR"]'), github.event.pull_request.author_association) ||
-      (github.event_name == 'push')
+      github.event_name == 'push'
 
     steps:
       # https://github.com/actions/checkout/issues/518
@@ -39,6 +39,7 @@ jobs:
         run: |
           echo 'Me!'
           echo 'Me too!'
+          echo ${{ github.event.pull_request.author_association }}
           npm install
           npm test
 
