@@ -40,6 +40,7 @@ jobs:
           echo 'Me!'
           echo 'Me too!'
           echo ${{ github.event.pull_request.author_association }}
+          
           npm install
           npm test
 
