@@ -37,6 +37,7 @@ jobs:
           CHROMA_URL: http://localhost:8000
           CHROMA_COLLECTION_NAME: javascript_tests
         run: |
+          echo 'Me!'
           npm install
           npm test
 
