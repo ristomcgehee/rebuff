@@ -1,25 +1,16 @@
 import secrets
-from typing import Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 from langchain_core.prompts import PromptTemplate
-from pydantic import BaseModel
+from openai import OpenAI as OpenAIClient
 
-from .detect_pi_heuristics import detect_prompt_injection_using_heuristic_on_input
-from .detect_pi_openai import call_openai_to_detect_pi, render_prompt_for_pi_detection
-from .detect_pi_vectorbase import detect_pi_using_vector_database, init_pinecone
+from .rebuff import DetectResponse, TacticOverride, TacticResult
+from .tactics.openai import OpenAI
+from .tactics.heuristic import Heuristic
+from .tactics.tactic import Tactic
+from .tactics.vector import Vector, init_pinecone
 
-
-class RebuffDetectionResponse(BaseModel):
-    heuristic_score: float
-    openai_score: float
-    vector_score: float
-    run_heuristic_check: bool
-    run_vector_check: bool
-    run_language_model_check: bool
-    max_heuristic_score: float
-    max_model_score: float
-    max_vector_score: float
-    injection_detected: bool
+Strategy = List[Tactic]
 
 
 class RebuffSdk:
@@ -27,103 +18,106 @@ class RebuffSdk:
         self,
         openai_apikey: str,
         pinecone_apikey: str,
-        pinecone_environment: str,
         pinecone_index: str,
         openai_model: str = "gpt-3.5-turbo",
     ) -> None:
         self.openai_model = openai_model
         self.openai_apikey = openai_apikey
         self.pinecone_apikey = pinecone_apikey
-        self.pinecone_environment = pinecone_environment
         self.pinecone_index = pinecone_index
         self.vector_store = None
+        self.strategies = None
+        self.default_strategy = "standard"
 
-    def initialize_pinecone(self) -> None:
-        self.vector_store = init_pinecone(
-            self.pinecone_environment,
-            self.pinecone_apikey,
-            self.pinecone_index,
-            self.openai_apikey,
-        )
+    def get_strategies(self) -> Dict[str, Strategy]:
+        if self.strategies:
+            return self.strategies
+
+        openai_client = OpenAIClient(api_key=self.openai_apikey)
+        heuristic_score_threshold = 0.75
+        vector_score_threshold = 0.9
+        openai_score_threshold = 0.9
+        strategies: Dict[str, Strategy] = {
+            # For now, this is the only strategy.
+            "standard": [
+                Heuristic(heuristic_score_threshold),
+                Vector(vector_score_threshold, self.get_vector_store()),
+                OpenAI(openai_score_threshold, self.openai_model, openai_client),
+            ]
+        }
+
+        self.strategies = strategies
+        return self.strategies
+
+    def get_vector_store(self):
+        if self.vector_store is None:
+            self.vector_store = init_pinecone(
+                self.pinecone_apikey,
+                self.pinecone_index,
+                self.openai_apikey,
+            )
+        return self.vector_store
 
     def detect_injection(
         self,
         user_input: str,
-        max_heuristic_score: float = 0.75,
-        max_vector_score: float = 0.90,
-        max_model_score: float = 0.90,
-        check_heuristic: bool = True,
-        check_vector: bool = True,
-        check_llm: bool = True,
-    ) -> RebuffDetectionResponse:
+        tactic_overrides: Optional[List[TacticOverride]] = None,
+    ) -> DetectResponse:
         """
         Detects if the given user input contains an injection attempt.
 
         Args:
             user_input (str): The user input to be checked for injection.
-            max_heuristic_score (float, optional): The maximum heuristic score allowed. Defaults to 0.75.
-            max_vector_score (float, optional): The maximum vector score allowed. Defaults to 0.90.
-            max_model_score (float, optional): The maximum model (LLM) score allowed. Defaults to 0.90.
-            check_heuristic (bool, optional): Whether to run the heuristic check. Defaults to True.
-            check_vector (bool, optional): Whether to run the vector check. Defaults to True.
-            check_llm (bool, optional): Whether to run the language model check. Defaults to True.
+            tactic_overrides (Optional[List[TacticOverride]], optional): A list of tactics to override.
+                If a tactic is not specified in this list, the default threshold for that tactic will be used.
 
         Returns:
-            RebuffDetectionResponse
+            DetectResponse: An object containing the detection metrics and a boolean indicating if an injection was
+                detected.
+
+        Example:
+            >>> from rebuff import RebuffSkd, TacticOverride, TacticName
+            >>> rb = RebuffSdk(...)
+            >>> user_input = "Your user input here"
+            >>> tactic_overrides = [
+            ...    TacticOverride(name=TacticName.HEURISTIC, threshold=0.6),
+            ...    TacticOverride(name=TacticName.LANGUAGE_MODEL, run=False),
+            ... ]
+            >>> response = rb.detect_injection(user_input, tactic_overrides)
         """
 
+        strategies = self.get_strategies()
         injection_detected = False
-
-        if check_heuristic:
-            rebuff_heuristic_score = detect_prompt_injection_using_heuristic_on_input(
-                user_input
+        tactic_results: List[TacticResult] = []
+        for tactic in strategies[self.default_strategy]:
+            tactic_override = next(
+                (t for t in tactic_overrides if t.name == tactic.name), None
             )
-
-        else:
-            rebuff_heuristic_score = 0
-
-        if check_vector:
-            self.initialize_pinecone()
-
-            vector_score = detect_pi_using_vector_database(
-                user_input, max_vector_score, self.vector_store
+            if tactic_override and tactic_override.run == False:
+                continue
+            threshold = (
+                tactic_override.threshold
+                if tactic_override
+                else tactic.default_threshold
             )
-            rebuff_vector_score = vector_score["top_score"]
-
-        else:
-            rebuff_vector_score = 0
-
-        if check_llm:
-            rendered_input = render_prompt_for_pi_detection(user_input)
-            model_response = call_openai_to_detect_pi(
-                rendered_input, self.openai_model, self.openai_apikey
+            execution = tactic.execute(user_input, threshold)
+            result = TacticResult(
+                name=tactic.name,
+                score=execution.score,
+                threshold=threshold,
+                detected=execution.score > threshold,
+                additional_fields=execution.additional_fields
+                if execution.additional_fields
+                else {},
             )
+            if result.detected:
+                injection_detected = True
+            tactic_results.append(result)
 
-            rebuff_model_score = float(model_response.get("completion", 0))
-
-        else:
-            rebuff_model_score = 0
-
-        if (
-            rebuff_heuristic_score > max_heuristic_score
-            or rebuff_model_score > max_model_score
-            or rebuff_vector_score > max_vector_score
-        ):
-            injection_detected = True
-
-        rebuff_response = RebuffDetectionResponse(
-            heuristic_score=rebuff_heuristic_score,
-            openai_score=rebuff_model_score,
-            vector_score=rebuff_vector_score,
-            run_heuristic_check=check_heuristic,
-            run_language_model_check=check_llm,
-            run_vector_check=check_vector,
-            max_heuristic_score=max_heuristic_score,
-            max_model_score=max_model_score,
-            max_vector_score=max_vector_score,
+        return DetectResponse(
             injection_detected=injection_detected,
+            tactic_results=tactic_results,
         )
-        return rebuff_response
 
     @staticmethod
     def generate_canary_word(length: int = 8) -> str:
@@ -212,10 +206,7 @@ class RebuffSdk:
             canary_word (str): The leaked canary word.
         """
 
-        if self.vector_store is None:
-            self.initialize_pinecone()
-
-        self.vector_store.add_texts(
+        self.get_vector_store().add_texts(
             [user_input],
             metadatas=[{"completion": completion, "canary_word": canary_word}],
         )

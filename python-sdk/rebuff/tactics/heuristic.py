@@ -2,6 +2,9 @@ import re
 from difflib import SequenceMatcher
 from typing import List
 
+from ..rebuff import TacticName
+from .tactic import Tactic, TacticExecution
+
 
 def generate_injection_keywords() -> List[str]:
     """
@@ -144,35 +147,43 @@ def get_matched_words_score(
     return base_score
 
 
-def detect_prompt_injection_using_heuristic_on_input(input: str) -> float:
-    highest_score = 0
-    max_matched_words = 5
+class Heuristic(Tactic):
+    name = TacticName.HEURISTIC
 
-    all_injection_keywords_strings = generate_injection_keywords()
-    normalized_input_string = normalize_string(input)
+    def __init__(self, threshold: float):
+        self.default_threshold = threshold
 
-    for keyword_string in all_injection_keywords_strings:
-        normalized_keyword_string = normalize_string(keyword_string)
-        keywords = normalized_keyword_string.split(" ")
-        # Generate substrings of similar length (to keyword length) in the input string
-        input_substrings = get_input_substrings(normalized_input_string, len(keywords))
+    def execute(self, input: str, threshold_override: float) -> TacticExecution:
+        highest_score = 0
+        max_matched_words = 5
 
-        # Calculate the similarity score between the keywords and each substring
-        for substring in input_substrings:
-            similarity_score = SequenceMatcher(
-                None, substring, normalized_keyword_string
-            ).ratio()
+        all_injection_keywords_strings = generate_injection_keywords()
+        normalized_input_string = normalize_string(input)
 
-            matched_word_score = get_matched_words_score(
-                substring, keywords, max_matched_words
+        for keyword_string in all_injection_keywords_strings:
+            normalized_keyword_string = normalize_string(keyword_string)
+            keywords = normalized_keyword_string.split(" ")
+            # Generate substrings of similar length (to keyword length) in the input string
+            input_substrings = get_input_substrings(
+                normalized_input_string, len(keywords)
             )
 
-            # Adjust the score using the similarity score
-            adjusted_score = matched_word_score - similarity_score * (
-                1 / (max_matched_words * 2)
-            )
+            # Calculate the similarity score between the keywords and each substring
+            for substring in input_substrings:
+                similarity_score = SequenceMatcher(
+                    None, substring, normalized_keyword_string
+                ).ratio()
 
-            if adjusted_score > highest_score:
-                highest_score = adjusted_score
+                matched_word_score = get_matched_words_score(
+                    substring, keywords, max_matched_words
+                )
 
-    return highest_score
+                # Adjust the score using the similarity score
+                adjusted_score = matched_word_score - similarity_score * (
+                    1 / (max_matched_words * 2)
+                )
+
+                if adjusted_score > highest_score:
+                    highest_score = adjusted_score
+
+        return TacticExecution(score=highest_score)

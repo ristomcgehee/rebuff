@@ -8,4 +8,4 @@ from .rebuff import (
     TacticResult,
 )
 
-from .sdk import RebuffSdk, RebuffDetectionResponse
+from .sdk import RebuffSdk
