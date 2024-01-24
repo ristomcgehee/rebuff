@@ -20,6 +20,7 @@ jobs:
       contains(fromJson('["MEMBER", "COLLABORATOR"]'), github.event.pull_request.author_association) ||
       github.event_name == 'push'
 
+
     steps:
       - name: Print event details
         run: |
