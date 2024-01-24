@@ -21,6 +21,10 @@ jobs:
       github.event_name == 'push'
 
     steps:
+      - name: Print event details
+        run: |
+          echo "${{ github.event_name }}"
+          echo "${{ github.event }}"
       # https://github.com/actions/checkout/issues/518
       - name: Check out code
         uses: actions/checkout@v3
