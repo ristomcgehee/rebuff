@@ -18,3 +18,4 @@ python-sdk/.pytest_cache/
 .vscode
 server/.env.local
 .mypy_cache
+*.aaaaaaaaaaaaaaaaa
